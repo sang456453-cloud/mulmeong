@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://sang456453-cloud.github.io/mulmeong/sitemap.xml

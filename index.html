@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>노을 바닷가 · 물멍하는 곳</title>
+<!-- 검색 소유 확인: 사장님이 발급받은 코드로 바꿔 넣기 -->
+<!-- <meta name="naver-site-verification" content="여기에_네이버_코드"> -->
+<!-- <meta name="google-site-verification" content="여기에_구글_코드"> -->
+<link rel="canonical" href="https://sang456453-cloud.github.io/mulmeong/">
+<meta property="og:title" content="노을 바닷가 · 물멍하는 곳">
+<meta property="og:description" content="파도 소리를 들으며 잠시 쉬어가는 온라인 물멍 공간.">
+<meta property="og:url" content="https://sang456453-cloud.github.io/mulmeong/">
 <meta name="description" content="파도 소리를 들으며 잠시 쉬어가는 온라인 물멍 공간. 수영, 물수제비, 발 담그기, 소원배, 심호흡.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap">
@@ -132,7 +139,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stro
  </nav>
  <div class="toast" id="toast"></div>
  <p class="hint">클릭이나 탭으로 걷고, WASD나 방향키로도 움직여요. 수영 중에도 같아요.</p>
- <p class="links"><a id="coffee" target="_blank" rel="noopener" hidden>개발자에게 커피 한 잔</a><a id="feedback" target="_blank" rel="noopener" hidden>의견 남기기</a></p>
+ <p class="links"><a href="글/">물멍하는 글</a><a id="coffee" target="_blank" rel="noopener" hidden>개발자에게 커피 한 잔</a><a id="feedback" target="_blank" rel="noopener" hidden>의견 남기기</a></p>
 </div>
 
 <div class="ask" id="ask"><form id="wishForm"><h3>소원배에 적을 한 줄</h3><p>한 사람당 소원배는 하나예요. 모두에게 보이고, 30자까지 적을 수 있어요.</p><input id="wishText" maxlength="30" placeholder="올해는 가족 모두 건강하게" autocomplete="off" required><div class="btns"><button type="button" id="wishCancel">취소</button><button type="submit">바다에 띄우기</button></div></form></div>
@@ -432,5 +439,7 @@ $('#enter').onclick=()=>{player=makeChar(nick,.5,.75,rnd()*360|0,false);$('#gate
 $('#sound').onclick=()=>{if(!AC)startAudio();setAudio(!enabled);};
 })();
 </script>
+<!-- 방문자 통계(Cloudflare Web Analytics): 토큰 발급 후 주석을 풀고 YOUR_TOKEN만 바꾸기 -->
+<!-- <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_TOKEN"}'></script> -->
 </body>
 </html>
