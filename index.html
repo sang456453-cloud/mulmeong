@@ -235,7 +235,7 @@ function renderBoard(){boardDirty=false;const box=$('#board');box.hidden=!player
  if(!top.length)ol.append(el('li','아직 아무도 던지지 않았어요','empty'));
  const me=el('li',null,'me');me.append(el('i','나'),el('span',player.best?'최고 '+player.best+'번 튕김':'아직 안 던졌어요'),el('b',(player.skips||0)+'번'));ol.append(me);box.append(ol);}
 
-function setGoal(c,x,y,then){const g=clampGoal(c,x,y);c.tx=g.x;c.ty=g.y;c.then=then||null;c.sit=false;}
+function setGoal(c,x,y,then){const g=clampGoal(c,x,y);c.tx=g.x;c.ty=g.y;c.then=then||null;c.sit=false;if(then!=='land')c.after=null;}
 // 튕기는 횟수는 1~9번 랜덤(적게 튕기는 쪽이 흔함). 많이 튕길수록 멀리, 오래 날아간다
 function throwStone(c,hops){c.sit=false;c.state='throw';c.t=0;const l=L(),dir=c.face||1;hops=hops||1+(rnd()*rnd()*9|0);
  c.skips=(c.skips||0)+1;c.best=Math.max(c.best||0,hops);boardDirty=true;
@@ -254,12 +254,13 @@ function stepChar(c,dt){const dx=c.tx-c.x,dy=c.ty-c.y,dist=Math.hypot(dx,dy);c.t
  if(c.swim){c.rip-=dt;if(c.rip<=0){c.rip=c.state==='walk'?.35:1.6;ripples.push(mkRipple(c.x,c.y+2,.5));if(c===player&&c.state==='walk')splashSound(.45);}}
  if(c.dip>0){c.dip-=dt;c.dipT-=dt;if(c.dipT<=0){c.dipT=1.3;ripples.push(mkRipple(c.x,l.shore-3,.6));if(c===player)splashSound(.2);}}
  if(c.sayT>0){c.sayT-=dt;if(c.sayT<=0)c.say=null;}}
-function landChar(c){c.swim=false;c.y=c.ty=L().shore+10;c.tx=c.x;if(c===player){splashSound(.7);$('#swimBtn').setAttribute('aria-pressed',false);}}
+function landChar(c){c.swim=false;c.y=c.ty=L().shore+10;c.tx=c.x;if(c===player){splashSound(.7);$('#swimBtn').setAttribute('aria-pressed',false);}
+ if(c.after){const a=c.after;c.after=null;setGoal(c,a.x,a.y);}}
 function keyMove(c,dt){const k=s=>keys.has(s);
  const vx=(k('d')||k('arrowright'))-(k('a')||k('arrowleft')),vy=(k('s')||k('arrowdown'))-(k('w')||k('arrowup'));
  if(!vx&&!vy)return;exitGaze();const l=L(),sp=(c.swim?60:85)*depth(c.y)*dt,g=clampGoal(c,c.x+vx*sp,c.y+vy*sp*.7);
  if(c.swim&&vy>0&&g.y>=l.shore-4){landChar(c);return;} // 물가에서 아래로 누르면 모래로 올라옴
- c.x=c.tx=g.x;c.y=c.ty=g.y;if(vx)c.face=vx;c.state='walk';c.sit=false;c.then=null;}
+ c.x=c.tx=g.x;c.y=c.ty=g.y;if(vx)c.face=vx;c.state='walk';c.sit=false;c.then=null;c.after=null;}
 function updateFX(dt){const l=L();
  for(let i=ripples.length;i--;){const r=ripples[i];r.r+=40*r.s*dt;r.a-=dt*.55;if(r.a<=0)ripples.splice(i,1);}
  for(let i=stones.length;i--;){const s=stones[i];s.p+=dt/s.dur;
@@ -411,10 +412,13 @@ $('#wishForm').onsubmit=async e=>{e.preventDefault();const text=$('#wishText').v
  addWish({...w,fx},true);myWish=store(WISHKEY,w);toast('소원배가 해 쪽으로 떠내려가요');plop();
  if(db){const {error}=await db.from('mulmeong_wishes').insert(w);if(error)console.warn('소원 저장 실패',error);else if(joined)chan.send({type:'broadcast',event:'wish',payload:{id:w.id,name:w.name,text:w.text,fx}});}};
 
-canvas.addEventListener('pointerdown',e=>{if(!player)return;if(gaze){exitGaze();return;}const l=L();
- if(player.swim&&e.clientY>l.shore)setGoal(player,e.clientX,l.shore-4,'land');else setGoal(player,e.clientX,e.clientY);});
-addEventListener('keydown',e=>{keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault();});
+canvas.addEventListener('pointerdown',e=>{if(!player)return;keys.clear();if(gaze){exitGaze();return;}const l=L();
+ if(player.swim&&e.clientY>l.shore){setGoal(player,e.clientX,l.shore-4,'land');player.after={x:e.clientX,y:e.clientY};} // 물가로 나온 뒤 탭한 자리까지 마저 걷는다
+ else setGoal(player,e.clientX,e.clientY);});
+// 키가 눌린 채로 남지 않게: 글자 입력 중·한/영 전환 중·창을 벗어날 때는 이동 키를 모두 푼다
+addEventListener('keydown',e=>{if(e.target&&e.target.closest&&e.target.closest('input,textarea'))return;if(e.isComposing||e.key==='Process'){keys.clear();return;}keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault();});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+addEventListener('blur',()=>keys.clear());document.addEventListener('visibilitychange',()=>{if(document.hidden)keys.clear();});
 $('.rail').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!player)return;const a=b.dataset.act;if(a!=='gaze')exitGaze();
  if(a==='gaze')enterGaze();
  else if(a==='swim'){if(player.swim){setGoal(player,player.x,L().shore-4,'land');toast('모래로 올라와요');}else{setGoal(player,player.x,L().shore+8,'swim');toast('물가로 가서 바다에 들어가요');}}
