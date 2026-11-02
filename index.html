@@ -169,12 +169,9 @@ const stars=Array.from({length:70},()=>({fx:rnd(),fy:rnd()*.6,r:.4+rnd()*1,sp:.5
 const shimmer=Array.from({length:50},()=>({fx:rnd(),fy:rnd(),len:20+rnd()*60,sp:.3+rnd(),k:.5+rnd()*1.5,ph:rnd()*7}));
 const grass=Array.from({length:16},()=>({fx:rnd()<.5?rnd()*.2:.8+rnd()*.2,fy:.55+rnd()*.45,h:24+rnd()*34,ph:rnd()*7}));
 
-// 인물
-const SAY=['오늘도 수고했어요','파도 소리가 참 좋네요','천천히 가도 괜찮아요','발이 시원해요','노을이 참 예쁘다','아무 생각 안 해도 돼요'];
-function makeChar(name,fx,fy,hue,isNpc){const l=L();const c={name,x:W*fx,y:l.shore+(l.bottom-l.shore)*fy,hue,isNpc,state:'idle',t:0,face:1,sit:false,swim:false,timer:isNpc?2+rnd()*5:0,dip:0,dipT:0,rip:0,say:null,sayT:0,then:null};c.tx=c.x;c.ty=c.y;return c;}
-const npcs=[makeChar('느긋한 해달',.18,.55,160,true),makeChar('고요한 돌고래',.45,0,200,true),makeChar('수줍은 소라게',.78,.7,20,true)];
-npcs[2].sit=true;npcs[0].face=-1;
-npcs[1].swim=true;npcs[1].y=npcs[1].ty=L().shore-(L().shore-L().horizon)*.3; // 처음부터 헤엄치는 친구
+// 인물: 접속하는 사람마다 해변 옷과 색이 랜덤, 다른 사람 화면에도 같은 옷으로 보임
+const OUTFITS=['꽃무늬 셔츠','래시가드','비키니','원피스 수영복','보드숏','티셔츠·반바지'];
+function makeChar(name,fx,fy,hue,isRemote,outfit){const l=L();const c={name,x:W*fx,y:l.shore+(l.bottom-l.shore)*fy,hue,isNpc:isRemote,outfit:outfit??(rnd()*OUTFITS.length|0),state:'idle',t:0,face:1,sit:false,swim:false,dip:0,dipT:0,rip:0,say:null,sayT:0,then:null};c.tx=c.x;c.ty=c.y;return c;}
 let player=null,gaze=false;
 const ripples=[],stones=[],boats=[],particles=[],floaters=[],keys=new Set();
 const mkRipple=(x,y,s=1)=>({x,y,r:2,a:.7,s});
@@ -200,13 +197,13 @@ async function connect(){if(!CONFIG.supabaseUrl||!CONFIG.supabaseKey)return;
  chan.on('presence',{event:'sync'},()=>{const st=chan.presenceState();$('#count').textContent='함께 '+Object.keys(st).length+'명';for(const id in remotes)if(!st[id])delete remotes[id];})
  // 다른 사람이 보낸 값은 믿지 않는다: 숫자 아니면 버리고, 범위를 자른다
  .on('broadcast',{event:'move'},({payload:p})=>{if(!p||p.id===me||typeof p.id!=='string')return;const fx=+p.fx,fy=+p.fy;if(!isFinite(fx)||!isFinite(fy))return;
-  const l=L(),r=remotes[p.id]||(remotes[p.id]=makeChar(String(p.name||'누군가').slice(0,16),clamp(fx,0,1),clamp(fy,-1.2,1),(+p.hue||0)%360,true));
-  r.name=String(p.name||'누군가').slice(0,16);r.hue=(+p.hue||0)%360;r.swim=!!p.swim;r.tx=clamp(fx,0,1)*W;r.ty=l.shore+(l.bottom-l.shore)*clamp(fy,-1.2,1);r.sit=!!p.sit;if(Math.abs(r.tx-r.x)<1.5)r.face=p.face<0?-1:1;})
+  const l=L(),r=remotes[p.id]||(remotes[p.id]=makeChar(String(p.name||'누군가').slice(0,16),clamp(fx,0,1),clamp(fy,-1.2,1),(+p.hue||0)%360,true,0));
+  r.name=String(p.name||'누군가').slice(0,16);r.hue=(+p.hue||0)%360;r.outfit=clamp(p.o|0,0,OUTFITS.length-1);r.swim=!!p.swim;r.tx=clamp(fx,0,1)*W;r.ty=l.shore+(l.bottom-l.shore)*clamp(fy,-1.2,1);r.sit=!!p.sit;if(Math.abs(r.tx-r.x)<1.5)r.face=p.face<0?-1:1;})
  .on('broadcast',{event:'fx'},({payload:p})=>{const r=p&&remotes[p.id];if(!r)return;
   if(p.type==='stone'){throwStone(r,clamp(p.hops|0,1,9));r.skips=clamp(p.skips|0,0,99999);r.best=clamp(p.best|0,0,9);boardDirty=true;}})
  .on('broadcast',{event:'wish'},({payload:w})=>{if(w&&typeof w.id==='string'&&w.text)addWish(w,true);})
  .subscribe(async s=>{if(s==='SUBSCRIBED'){joined=true;await chan.track({name:player.name});sendMove(true);}else if(s==='CLOSED'||s==='CHANNEL_ERROR')joined=false;});}
-function sendMove(force){if(!joined||!player.id)return;const now=performance.now(),p={id:player.id,name:player.name,hue:player.hue,sit:player.sit,swim:player.swim,face:player.face,...toFrac(player)},key=JSON.stringify(p);
+function sendMove(force){if(!joined||!player.id)return;const now=performance.now(),p={id:player.id,name:player.name,hue:player.hue,o:player.outfit,sit:player.sit,swim:player.swim,face:player.face,...toFrac(player)},key=JSON.stringify(p);
  if(!force&&(key===lastSent?now-lastSend<5000:now-lastSend<250))return; // 움직일 때 초당 4번, 가만히 있으면 5초마다
  lastSend=now;lastSent=key;chan.send({type:'broadcast',event:'move',payload:p});}
 function sendFx(type,extra){if(joined&&player.id)chan.send({type:'broadcast',event:'fx',payload:{id:player.id,type,...extra}});}
@@ -216,7 +213,7 @@ let boardDirty=true;
 const SAVE='mulmeong.skips';
 function renderBoard(){boardDirty=false;const el=$('#board');el.hidden=!player;if(!player)return;el.replaceChildren();
  const h=document.createElement('h3');h.textContent='🏆 물수제비 순위 · 지금 바닷가에 있는 사람';el.append(h);const ol=document.createElement('ol');
- const top=[player,...npcs,...Object.values(remotes)].filter(c=>c.skips>0).sort((a,b)=>b.skips-a.skips).slice(0,3);
+ const top=[player,...Object.values(remotes)].filter(c=>c.skips>0).sort((a,b)=>b.skips-a.skips).slice(0,3);
  top.forEach((c,i)=>{const li=document.createElement('li'),n=document.createElement('span');li.textContent=['🥇','🥈','🥉'][i]+' '+c.name;n.textContent=c.skips+'번';li.append(n);ol.append(li);});
  if(!top.length){const li=document.createElement('li');li.textContent='아직 아무도 안 던졌어요';ol.append(li);}
  const me=document.createElement('li'),b=document.createElement('span');me.className='me';me.textContent='나 · '+(player.skips||0)+'번';b.textContent=player.best?'최고 '+player.best+'번 튕김':'';me.append(b);ol.append(me);el.append(ol);}
@@ -241,12 +238,6 @@ function stepChar(c,dt){const dx=c.tx-c.x,dy=c.ty-c.y,dist=Math.hypot(dx,dy);c.t
  if(c.dip>0){c.dip-=dt;c.dipT-=dt;if(c.dipT<=0){c.dipT=1.3;ripples.push(mkRipple(c.x,l.shore-3,.6));if(c===player)splashSound(.2);}}
  if(c.sayT>0){c.sayT-=dt;if(c.sayT<=0)c.say=null;}}
 function landChar(c){c.swim=false;c.y=c.ty=L().shore+10;c.tx=c.x;if(c===player){splashSound(.7);$('#swimBtn').setAttribute('aria-pressed',false);}}
-function npcThink(n,dt){n.timer-=dt;if(n.timer>0)return;n.timer=5+rnd()*9;const l=L(),r=rnd();
- if(n.swim){if(r<.7)setGoal(n,30+rnd()*(W-60),swimTop(l)+rnd()*(l.shore-4-swimTop(l)));else{n.say=pick(SAY);n.sayT=4.5;}return;}
- if(r<.4)setGoal(n,30+rnd()*(W-60),l.shore+8+rnd()*(l.bottom-l.shore-8));
- else if(r<.65)n.sit=!n.sit;
- else if(r<.85){n.say=pick(SAY);n.sayT=4.5;}
- else throwStone(n);}
 function keyMove(c,dt){const k=s=>keys.has(s);
  const vx=(k('d')||k('arrowright'))-(k('a')||k('arrowleft')),vy=(k('s')||k('arrowdown'))-(k('w')||k('arrowup'));
  if(!vx&&!vy)return;exitGaze();const l=L(),sp=(c.swim?60:85)*depth(c.y)*dt,g=clampGoal(c,c.x+vx*sp,c.y+vy*sp*.7);
@@ -314,16 +305,25 @@ function drawBoat(b,t){const l=L(),x=b.fx*W,y=l.horizon+(l.shore-l.horizon)*b.fy
  ctx.fillStyle='#fff3e0';ctx.beginPath();ctx.moveTo(-10,-3);ctx.lineTo(10,-3);ctx.lineTo(6,3);ctx.lineTo(-6,3);ctx.closePath();ctx.fill();
  ctx.beginPath();ctx.moveTo(0,-3);ctx.lineTo(0,-14);ctx.lineTo(7,-4);ctx.closePath();ctx.fill();
  ctx.fillStyle='#ffb347';ctx.beginPath();ctx.arc(0,-5,1.8,0,7);ctx.fill();ctx.restore();}
-function drawChar(c,t){const d=depth(c.y),s=d*Math.max(9,H/60),body=`hsl(${c.hue} 45% 58%)`,skin='#f3d2b4';let x=c.x,y=c.y,hy;
- if(c.swim){ // 물 위로 머리와 팔만
+// 옷: 0 꽃무늬 셔츠+베이지 반바지 / 1 래시가드+레깅스 / 2 비키니 / 3 원피스 수영복 / 4 보드숏(웃통) / 5 티셔츠·반바지
+function drawBody(c,x,y,s){const A=`hsl(${c.hue} 60% 55%)`,B=`hsl(${(c.hue+40)%360} 75% 72%)`,skin='#f3d2b4',o=c.outfit;
+ const T=c.sit?[x-s*.9,y-s*1.9,s*1.8,s*1.7]:[x-s*.9,y-s*3,s*1.8,s*2],G=c.sit?[x-s*.9+(c.face>0?s*.5:0),y-s*.5,s*1.3,s*.5]:[x-s*.7,y-s*1.2,s*1.4,s*1.2];
+ ctx.fillStyle=o===2||o===3?skin:o===1?'#2b2f3a':o===4?A:o===0?'#e9dcc5':B;rr(G[0],G[1],G[2],G[3],s*.3);ctx.fill();
+ if(o===4){ctx.fillStyle=B;rr(G[0],G[1]+G[3]*.35,G[2],G[3]*.22,2);ctx.fill();}
+ if(o===2){ctx.fillStyle=A;rr(G[0],G[1],G[2],G[3]*(c.sit?.9:.4),s*.25);ctx.fill();}
+ ctx.fillStyle=o===2||o===4?skin:A;rr(T[0],T[1],T[2],T[3],s*.6);ctx.fill();
+ if(o===0){ctx.fillStyle=B;for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(T[0]+T[2]*(.18+.64*((i*.37+.1)%1)),T[1]+T[3]*(.12+.76*((i*.61+.2)%1)),s*.15,0,7);ctx.fill();}}
+ if(o===1){ctx.fillStyle=B;rr(T[0],T[1]+T[3]*.3,T[2],T[3]*.16,2);ctx.fill();}
+ if(o===2){ctx.fillStyle=A;rr(T[0],T[1]+T[3]*.22,T[2],T[3]*.3,s*.3);ctx.fill();}}
+function drawChar(c,t){const d=depth(c.y),s=d*Math.max(9,H/60),skin='#f3d2b4',o=c.outfit;let x=c.x,y=c.y,hy;
+ if(c.swim){ // 물 위로 머리와 어깨, 팔만
   y+=Math.sin(t*2+c.x)*1.5;ctx.fillStyle='rgba(255,255,255,.18)';ctx.beginPath();ctx.ellipse(x,y+2,s*1.6,s*.5,0,0,7);ctx.fill();
-  ctx.fillStyle=body;rr(x-s*.9,y-s*.5,s*1.8,s*.7,s*.3);ctx.fill();hy=y-s*1.1;
+  ctx.fillStyle=o===2||o===4?skin:`hsl(${c.hue} 60% 55%)`;rr(x-s*.9,y-s*.5,s*1.8,s*.7,s*.3);ctx.fill();hy=y-s*1.1;
   if(c.state==='walk'){const a=Math.sin(t*6);ctx.strokeStyle=skin;ctx.lineWidth=s*.35;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+c.face*s*.8,y-s*.3);ctx.lineTo(x+c.face*s*1.7,y-s*.3-Math.max(0,a)*s*1.4);ctx.stroke();}}
  else{const bob=c.state==='walk'?Math.abs(Math.sin(t*9))*2*d:0;y-=bob;
   ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.ellipse(c.x,c.y+2,s*1.3,s*.45,0,0,7);ctx.fill();
-  if(c.sit){ctx.fillStyle=body;rr(x-s*.9,y-s*1.9,s*1.8,s*1.7,s*.6);ctx.fill();ctx.fillStyle='#3a3344';rr(x-s*.9+(c.face>0?s*.5:0),y-s*.5,s*1.3,s*.5,s*.25);ctx.fill();hy=y-s*2.5;}
-  else{ctx.fillStyle='#3a3344';rr(x-s*.7,y-s*1.2,s*1.4,s*1.2,s*.3);ctx.fill();ctx.fillStyle=body;rr(x-s*.9,y-s*3,s*1.8,s*2,s*.6);ctx.fill();hy=y-s*3.6;
-   if(c.state==='throw'){ctx.strokeStyle=skin;ctx.lineWidth=s*.35;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+c.face*s*.8,y-s*2.6);ctx.lineTo(x+c.face*s*1.6,y-s*3.6);ctx.stroke();}}}
+  drawBody(c,x,y,s);hy=c.sit?y-s*2.5:y-s*3.6;
+  if(!c.sit&&c.state==='throw'){ctx.strokeStyle=skin;ctx.lineWidth=s*.35;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x+c.face*s*.8,y-s*2.6);ctx.lineTo(x+c.face*s*1.6,y-s*3.6);ctx.stroke();}}
  ctx.fillStyle=skin;ctx.beginPath();ctx.arc(x,hy,s*.9,0,7);ctx.fill();
  ctx.fillStyle='#2b2320';ctx.beginPath();ctx.arc(x+c.face*s*.3,hy,s*.1,0,7);ctx.arc(x+c.face*s*.6,hy,s*.1,0,7);ctx.fill();
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`${Math.max(10,11*d)}px sans-serif`;const ly=hy-s*1.6;let tw=ctx.measureText(c.name).width+14;
@@ -332,12 +332,11 @@ function drawChar(c,t){const d=depth(c.y),s=d*Math.max(9,H/60),body=`hsl(${c.hue
 
 let last=performance.now();
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const t=now/1000;
- for(const n of npcs){npcThink(n,dt);stepChar(n,dt);}
  if(player){stepChar(player,dt);keyMove(player,dt);sendMove();}
  for(const id in remotes)stepChar(remotes[id],dt);
  updateFX(dt);drawScene(t);
  for(const b of boats)drawBoat(b,t);for(const r of ripples)drawRipple(r);for(const s of stones)drawStone(s);
- const chars=[...npcs,...Object.values(remotes)];if(player)chars.push(player);chars.sort((a,b)=>a.y-b.y);for(const c of chars)drawChar(c,t);
+ const chars=Object.values(remotes);if(player)chars.push(player);chars.sort((a,b)=>a.y-b.y);for(const c of chars)drawChar(c,t);
  drawFX();if(boardDirty)renderBoard();
  requestAnimationFrame(frame);}
 requestAnimationFrame(frame);
@@ -395,18 +394,10 @@ $('.rail').addEventListener('click',e=>{const b=e.target.closest('button');if(!b
  else if(a==='dip'){if(player.swim)landChar(player);setGoal(player,player.x,L().shore+8,'dip');toast('물가로 가서 발을 담가요');}
  else if(a==='boat'){if(myWish){toast(`소원배는 한 사람당 하나예요 · 내 소원: “${myWish.text}”`);return;}$('#wishText').value='';ask.classList.add('on');setTimeout(()=>$('#wishText').focus(),50);}
  else if(a==='breath')startBreath();});
-$('#enter').onclick=()=>{player=makeChar(nick,.5,.75,15,false);$('#gate').classList.add('off');$('#ui').style.opacity=1;
+$('#enter').onclick=()=>{player=makeChar(nick,.5,.75,rnd()*360|0,false);$('#gate').classList.add('off');$('#ui').style.opacity=1;
  try{const s=JSON.parse(localStorage.getItem(SAVE));if(s){player.skips=s.skips|0;player.best=s.best|0;}}catch(e){}boardDirty=true;if(myWish)addWish(myWish);
- if($('#soundOpt').checked)startAudio();else setAudio(false);toast(`${nick}님, 천천히 머물다 가세요`);connect().catch(e=>console.warn('함께 모드 연결 실패, 혼자 모드로 계속',e));};
+ if($('#soundOpt').checked)startAudio();else setAudio(false);toast(`${nick}님, 오늘 옷은 ${OUTFITS[player.outfit]} · 천천히 머물다 가세요`);connect().catch(e=>console.warn('함께 모드 연결 실패, 혼자 모드로 계속',e));};
 $('#sound').onclick=()=>{if(!AC)startAudio();setAudio(!enabled);};
-
-// ?selftest 로 열면 순수 계산 부분을 점검
-if(location.search.includes('selftest')){const a=(c,m)=>{if(!c)throw new Error('selftest 실패: '+m);};const l=L();
- a(makeNick().split(' ').length===2,'이름');
- const g=clampGoal({swim:false},10,-50);a(g.x===20&&g.y===l.shore+8,'걷기 목표 보정');
- const s=clampGoal({swim:true},W+99,H);a(s.x===W-20&&s.y===l.shore-4,'수영 목표 보정');
- a(depth(l.shore)===.75&&Math.abs(depth(l.shore-1e-6)-.75)<1e-3&&depth(0)===.4&&Math.abs(depth(H)-1.3)<1e-9,'원근 크기 연속');
- console.log('selftest ok');}
 })();
 </script>
 </body>
