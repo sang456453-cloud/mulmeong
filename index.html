@@ -190,7 +190,7 @@ function addWish(w,fromShore){if(!w||!w.id||boats.some(b=>b.id===w.id))return;co
  if(boats.length>12)boats.shift();}
 
 // 함께 머물기: Supabase Realtime(무료 플랜) 채널로 위치만 주고받음. 서버 코드·DB 없음
-const remotes={};let chan=null,db=null,lastSend=0,lastSent='';
+const remotes={};let chan=null,db=null,joined=false,lastSend=0,lastSent='';
 const toFrac=c=>{const l=L();return{fx:+(c.x/W).toFixed(4),fy:+((c.y-l.shore)/(l.bottom-l.shore)).toFixed(4)}};
 async function connect(){if(!CONFIG.supabaseUrl||!CONFIG.supabaseKey)return;
  const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm');
@@ -198,16 +198,18 @@ async function connect(){if(!CONFIG.supabaseUrl||!CONFIG.supabaseKey)return;
  db=createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);chan=db.channel('mulmeong',{config:{presence:{key:me}}});
  db.from('mulmeong_wishes').select('id,name,text').order('created_at',{ascending:false}).limit(12).then(({data,error})=>{if(error)console.warn('소원 불러오기 실패',error);(data||[]).reverse().forEach(addWish);});
  chan.on('presence',{event:'sync'},()=>{const st=chan.presenceState();$('#count').textContent='함께 '+Object.keys(st).length+'명';for(const id in remotes)if(!st[id])delete remotes[id];})
- .on('broadcast',{event:'move'},({payload:p})=>{if(p.id===me)return;const l=L(),r=remotes[p.id]||(remotes[p.id]=makeChar(p.name,p.fx,p.fy,p.hue,true));
-  r.name=String(p.name).slice(0,16);r.hue=p.hue;r.swim=p.swim;r.tx=p.fx*W;r.ty=l.shore+(l.bottom-l.shore)*p.fy;r.sit=p.sit;if(Math.abs(r.tx-r.x)<1.5)r.face=p.face;})
- .on('broadcast',{event:'fx'},({payload:p})=>{const r=remotes[p.id];if(!r)return;
-  if(p.type==='stone'){throwStone(r,p.hops);r.skips=p.skips|0;r.best=p.best|0;boardDirty=true;}})
- .on('broadcast',{event:'wish'},({payload:w})=>addWish(w,true))
- .subscribe(async s=>{if(s==='SUBSCRIBED'){await chan.track({name:player.name});sendMove(true);}});}
-function sendMove(force){if(!chan||!player.id)return;const now=performance.now(),p={id:player.id,name:player.name,hue:player.hue,sit:player.sit,swim:player.swim,face:player.face,...toFrac(player)},key=JSON.stringify(p);
+ // 다른 사람이 보낸 값은 믿지 않는다: 숫자 아니면 버리고, 범위를 자른다
+ .on('broadcast',{event:'move'},({payload:p})=>{if(!p||p.id===me||typeof p.id!=='string')return;const fx=+p.fx,fy=+p.fy;if(!isFinite(fx)||!isFinite(fy))return;
+  const l=L(),r=remotes[p.id]||(remotes[p.id]=makeChar(String(p.name||'누군가').slice(0,16),clamp(fx,0,1),clamp(fy,-1.2,1),(+p.hue||0)%360,true));
+  r.name=String(p.name||'누군가').slice(0,16);r.hue=(+p.hue||0)%360;r.swim=!!p.swim;r.tx=clamp(fx,0,1)*W;r.ty=l.shore+(l.bottom-l.shore)*clamp(fy,-1.2,1);r.sit=!!p.sit;if(Math.abs(r.tx-r.x)<1.5)r.face=p.face<0?-1:1;})
+ .on('broadcast',{event:'fx'},({payload:p})=>{const r=p&&remotes[p.id];if(!r)return;
+  if(p.type==='stone'){throwStone(r,clamp(p.hops|0,1,9));r.skips=clamp(p.skips|0,0,99999);r.best=clamp(p.best|0,0,9);boardDirty=true;}})
+ .on('broadcast',{event:'wish'},({payload:w})=>{if(w&&typeof w.id==='string'&&w.text)addWish(w,true);})
+ .subscribe(async s=>{if(s==='SUBSCRIBED'){joined=true;await chan.track({name:player.name});sendMove(true);}else if(s==='CLOSED'||s==='CHANNEL_ERROR')joined=false;});}
+function sendMove(force){if(!joined||!player.id)return;const now=performance.now(),p={id:player.id,name:player.name,hue:player.hue,sit:player.sit,swim:player.swim,face:player.face,...toFrac(player)},key=JSON.stringify(p);
  if(!force&&(key===lastSent?now-lastSend<5000:now-lastSend<250))return; // 움직일 때 초당 4번, 가만히 있으면 5초마다
  lastSend=now;lastSent=key;chan.send({type:'broadcast',event:'move',payload:p});}
-function sendFx(type,extra){if(chan&&player.id)chan.send({type:'broadcast',event:'fx',payload:{id:player.id,type,...extra}});}
+function sendFx(type,extra){if(joined&&player.id)chan.send({type:'broadcast',event:'fx',payload:{id:player.id,type,...extra}});}
 
 // 물수제비 순위판: 지금 이 바닷가에 있는 사람(나·NPC·함께 모드 접속자) 기준. 내 기록만 브라우저에 저장
 let boardDirty=true;
@@ -371,7 +373,7 @@ function toast(m){const el=$('#toast');el.textContent=m;el.classList.add('on');c
 function enterGaze(){gaze=true;if(!player.swim)player.sit=true;player.tx=player.x;player.ty=player.y;player.then=null;toast('아무것도 하지 않아도 괜찮아요');clearTimeout(gazeT);gazeT=setTimeout(()=>{if(gaze)$('#ui').style.opacity=.15;},2500);}
 function exitGaze(){if(!gaze)return;gaze=false;player.sit=false;clearTimeout(gazeT);$('#ui').style.opacity=1;}
 const breath=$('#breath'),circle=$('#circle'),btext=$('#btext');
-function startBreath(){breath.classList.add('on');const ph=[['들이쉬기',4,1],['잠시 멈추기',4,1],['내쉬기',6,.6]];let i=0;
+function startBreath(){clearTimeout(bT);breath.classList.add('on');const ph=[['들이쉬기',4,1],['잠시 멈추기',4,1],['내쉬기',6,.6]];let i=0;
  const go=()=>{const [txt,sec,sc]=ph[i++%3];btext.textContent=txt;circle.style.transitionDuration=sec+'s';circle.style.transform=`scale(${sc})`;bT=setTimeout(go,sec*1000);};
  circle.style.transitionDuration='0s';circle.style.transform='scale(.6)';requestAnimationFrame(()=>requestAnimationFrame(go));}
 breath.onclick=()=>{breath.classList.remove('on');clearTimeout(bT);};
@@ -380,7 +382,7 @@ $('#wishCancel').onclick=()=>ask.classList.remove('on');
 $('#wishForm').onsubmit=async e=>{e.preventDefault();const text=$('#wishText').value.trim().slice(0,30);if(!text)return;ask.classList.remove('on');
  const w={id:(player.id||'local')+'-'+Date.now().toString(36),client_id:clientId,name:player.name.slice(0,16),text},fx=+(player.x/W).toFixed(3);
  addWish({...w,fx},true);myWish=store(WISHKEY,w);toast('소원배가 해 쪽으로 떠내려가요');plop();
- if(db){const {error}=await db.from('mulmeong_wishes').insert(w);if(error)console.warn('소원 저장 실패',error);else chan.send({type:'broadcast',event:'wish',payload:{id:w.id,name:w.name,text:w.text,fx}});}};
+ if(db){const {error}=await db.from('mulmeong_wishes').insert(w);if(error)console.warn('소원 저장 실패',error);else if(joined)chan.send({type:'broadcast',event:'wish',payload:{id:w.id,name:w.name,text:w.text,fx}});}};
 
 canvas.addEventListener('pointerdown',e=>{if(!player)return;if(gaze){exitGaze();return;}const l=L();
  if(player.swim&&e.clientY>l.shore)setGoal(player,e.clientX,l.shore-4,'land');else setGoal(player,e.clientX,e.clientY);});
