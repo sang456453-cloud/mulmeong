@@ -144,8 +144,9 @@ addEventListener('resize',resize);resize();
 // 장면 구획(비율) — 하늘 / 바다 / 모래
 const L=()=>({horizon:H*.42,shore:H*.72,bottom:H*.96});
 // 하루: 4분에 한 바퀴, 실제 시계 기준이라 모두 같은 하늘을 봄. 0 새벽 → .3 한낮 → .6 노을 → .8 한밤 → 1 새벽. ?phase=0.3 으로 미리보기 가능
-const DAY=240,phaseOverride=parseFloat(new URLSearchParams(location.search).get('phase'));
-const dayPhase=()=>isFinite(phaseOverride)?phaseOverride:(Date.now()/1000%DAY)/DAY;
+// 영상 촬영용: ?start=0.45&day=40 이면 노을(0.45)에서 시작해 40초에 하루가 돈다
+const Q=new URLSearchParams(location.search),DAY=parseFloat(Q.get('day'))||240,phaseOverride=parseFloat(Q.get('phase')),startPhase=parseFloat(Q.get('start')),t0=performance.now();
+const dayPhase=()=>isFinite(phaseOverride)?phaseOverride:isFinite(startPhase)?(startPhase+(performance.now()-t0)/1000/DAY)%1:(Date.now()/1000%DAY)/DAY;
 const SKY=[[0,['#2b2550','#7a4f74','#e08a5a','#ffd59a']],[.3,['#3a7bd5','#6fb1e6','#a8d4f0','#dff0fa']],[.6,['#1b1a3a','#5a3a6e','#c86a4e','#f3b36a']],[.8,['#05070f','#0c1427','#132038','#1b2a44']],[1,['#2b2550','#7a4f74','#e08a5a','#ffd59a']]];
 const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)),mix=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t),rgb=(c,a=1)=>`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
 function sky(p){let i=0;while(SKY[i+1][0]<p)i++;const [p0,a]=SKY[i],[p1,b]=SKY[i+1],t=(p-p0)/(p1-p0);return a.map((h,j)=>mix(hex(h),hex(b[j]),t));}
@@ -234,7 +235,7 @@ function stepChar(c,dt){const dx=c.tx-c.x,dy=c.ty-c.y,dist=Math.hypot(dx,dy);c.t
   else if(c.then==='land')landChar(c);
   c.then=null;}
  if(c.state==='throw'&&c.t>.5)c.state='idle';
- if(c.swim){c.rip-=dt;if(c.rip<=0){c.rip=c.state==='walk'?.35:1.6;ripples.push(mkRipple(c.x,c.y+2,.5));if(c===player&&c.state==='walk')splashSound(.3);}}
+ if(c.swim){c.rip-=dt;if(c.rip<=0){c.rip=c.state==='walk'?.35:1.6;ripples.push(mkRipple(c.x,c.y+2,.5));if(c===player&&c.state==='walk')splashSound(.45);}}
  if(c.dip>0){c.dip-=dt;c.dipT-=dt;if(c.dipT<=0){c.dipT=1.3;ripples.push(mkRipple(c.x,l.shore-3,.6));if(c===player)splashSound(.2);}}
  if(c.sayT>0){c.sayT-=dt;if(c.sayT<=0)c.say=null;}}
 function landChar(c){c.swim=false;c.y=c.ty=L().shore+10;c.tx=c.x;if(c===player){splashSound(.7);$('#swimBtn').setAttribute('aria-pressed',false);}}
@@ -353,10 +354,13 @@ function startAudio(){if(AC)return;AC=new(window.AudioContext||window.webkitAudi
  layer(whiteBuf,'bandpass',2200,.7,.07,.06,1.8);   // 부서지는 거품(고음), 조금 늦게 따라옴
  layer(whiteBuf,'highpass',5000,.7,.012,0,0);      // 바닷바람
  setAudio(enabled);}
-// 첨벙: 짧은 잡음을 높은 데서 낮은 데로 훑어 내리면 물 튀는 소리가 된다
-function splashSound(v=1){if(!AC||!enabled)return;const n=AC.currentTime,src=AC.createBufferSource();src.buffer=whiteBuf;const f=AC.createBiquadFilter();f.type='bandpass';f.Q.value=.8;
- f.frequency.setValueAtTime(2200,n);f.frequency.exponentialRampToValueAtTime(400,n+.3);const g=AC.createGain();g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(.6*v,n+.02);g.gain.exponentialRampToValueAtTime(.001,n+.35);
- src.connect(f).connect(g).connect(master);src.start(n,rnd()*2);src.stop(n+.4);if(v>.5)plop(.7);}
+// 첨벙 = 낮은 "첨"(둔탁한 울림) + 물 튀는 잡음(높은 데서 낮은 데로) + 물방울 "벙"(짧은 고음 몇 개). 파도 소리보다 크게
+function splashSound(v=1){if(!AC||!enabled)return;const n=AC.currentTime;
+ const src=AC.createBufferSource();src.buffer=whiteBuf;const f=AC.createBiquadFilter();f.type='bandpass';f.Q.value=.6;f.frequency.setValueAtTime(3200,n);f.frequency.exponentialRampToValueAtTime(500,n+.28);
+ const g=AC.createGain();g.gain.setValueAtTime(.0001,n);g.gain.exponentialRampToValueAtTime(1.6*v,n+.015);g.gain.exponentialRampToValueAtTime(.001,n+.45);src.connect(f).connect(g).connect(master);src.start(n,rnd()*2);src.stop(n+.5);
+ const o=AC.createOscillator(),og=AC.createGain();o.type='sine';o.frequency.setValueAtTime(190,n);o.frequency.exponentialRampToValueAtTime(55,n+.25);og.gain.setValueAtTime(.9*v,n);og.gain.exponentialRampToValueAtTime(.001,n+.3);o.connect(og).connect(master);o.start(n);o.stop(n+.32);
+ for(let i=0,k=2+(rnd()*3|0);i<k;i++){const d=AC.createOscillator(),dg=AC.createGain(),t0=n+.06+rnd()*.3,fq=700+rnd()*1100;d.type='sine';d.frequency.setValueAtTime(fq,t0);d.frequency.exponentialRampToValueAtTime(fq*.6,t0+.08);
+  dg.gain.setValueAtTime(.0001,t0);dg.gain.exponentialRampToValueAtTime(.45*v,t0+.008);dg.gain.exponentialRampToValueAtTime(.001,t0+.1);d.connect(dg).connect(master);d.start(t0);d.stop(t0+.12);}}
 function setAudio(on){enabled=on;$('#sound').setAttribute('aria-pressed',on);if(!AC)return;if(on)AC.resume();master.gain.setTargetAtTime(on?.4:0,AC.currentTime,.8);}
 function plop(pitch=1){if(!AC||!enabled)return;const o=AC.createOscillator(),g=AC.createGain(),n=AC.currentTime;o.type='sine';o.frequency.setValueAtTime(520*pitch,n);o.frequency.exponentialRampToValueAtTime(140*pitch,n+.14);
  g.gain.setValueAtTime(.25,n);g.gain.exponentialRampToValueAtTime(.001,n+.2);o.connect(g).connect(master);o.start();o.stop(n+.22);}
