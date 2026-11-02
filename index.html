@@ -31,6 +31,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:
 .topright{position:absolute;right:18px;top:max(16px,env(safe-area-inset-top));display:flex;align-items:center;gap:8px}
 .count{font-size:12px;color:var(--ink);background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:7px 12px;backdrop-filter:blur(10px)}
 .count:empty{display:none}
+select.count{appearance:none;-webkit-appearance:none;cursor:pointer;font-family:inherit;padding-right:22px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23F6C177' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;background-size:10px}
+select.count option{background:#1c2740;color:var(--ink)}
 .count::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);margin-right:7px;vertical-align:1px;box-shadow:0 0 8px var(--gold)}
 .iconbtn{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--glass);color:var(--ink);cursor:pointer;backdrop-filter:blur(10px);display:grid;place-items:center}
 .iconbtn svg{width:18px;height:18px}
@@ -46,6 +48,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 .board li i{font-style:normal;font-family:var(--serif);font-size:16px;color:var(--sea)}
 .board li:first-child i{color:var(--gold)}
 .board li b{font-weight:500}
+.board li span{word-break:keep-all}
 .board li.empty{grid-template-columns:1fr;color:var(--muted)}
 .board li.me{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;color:var(--gold)}
 /* 행동: 하나의 유리 띠 */
@@ -104,6 +107,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stro
  .rail button[aria-pressed=true] small{color:var(--gold)}
  .toast{top:auto;bottom:122px;font-size:14px;white-space:normal;max-width:84%}
  .hint{display:none}
+ .brand span{display:none}.topright{gap:6px}.count{padding:6px 9px;font-size:11px}select.count{padding-right:20px;background-position:right 7px center}
  .links{right:16px;left:auto;bottom:auto;top:calc(max(16px,env(safe-area-inset-top)) + 50px);flex-direction:column;align-items:flex-end;gap:6px}
  .board{width:192px;padding:10px 12px 8px}.board h3{font-size:14px}.board li{font-size:12px}
 }
@@ -128,7 +132,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 <div class="ui" id="ui" style="opacity:0">
  <div class="brand"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="17" cy="14" r="6"/><path d="M3 23c3-3 6-3 9 0s6 3 9 0 6-3 9 0M3 29c3-3 6-3 9 0s6 3 9 0 6-3 9 0"/></svg><div><b>노을 바닷가</b><span>물멍하는 곳</span></div></div>
  <div class="board" id="board" hidden></div>
- <div class="topright"><span id="count" class="count"></span><button class="iconbtn" id="sound" aria-pressed="true" title="파도 소리 켜기/끄기"><svg class="i" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9c1.5 1.5 1.5 4.5 0 6M18.5 6.5c3 3 3 8 0 11"/></svg></button></div>
+ <div class="topright"><span id="count" class="count"></span><select id="soundMode" class="count" title="배경 소리 고르기" aria-label="배경 소리"><option value="wave">파도</option><option value="gull">파도와 갈매기</option><option value="cricket">밤 풀벌레</option><option value="rain">빗소리</option></select><button class="iconbtn" id="sound" aria-pressed="true" title="파도 소리 켜기/끄기"><svg class="i" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16 9c1.5 1.5 1.5 4.5 0 6M18.5 6.5c3 3 3 8 0 11"/></svg></button></div>
  <nav class="rail" aria-label="행동">
   <button data-act="gaze"><svg class="i" viewBox="0 0 24 24"><path d="M6 13a6 6 0 0 1 12 0"/><path d="M12 4v2M4.5 7.5l1.4 1.4M19.5 7.5l-1.4 1.4"/><path d="M2 17c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 21c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg><small>물멍</small></button>
   <button data-act="swim" id="swimBtn" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><circle cx="15" cy="7" r="2.5"/><path d="M3 12l5-5 4 4"/><path d="M2 18c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></svg><small>수영하기</small></button>
@@ -210,6 +214,12 @@ function addWish(w,fromShore){if(!w||!w.id||boats.some(b=>b.id===w.id))return;co
  boats.push({id:w.id,name:String(w.name).slice(0,16),text:String(w.text).slice(0,30),fx:fromShore?clamp(+w.fx||.5,.05,.95):tx,fy:fromShore?1:ty,tx,ty,vx:((h>>20)&1?1:-1)*.004,ph:h%7});
  if(boats.length>12)boats.shift();}
 
+// 바닷가 생물: 게 1마리(모래, 다가가면 숨음), 물고기 그림자 3마리(물, 헤엄쳐 다가가면 달아남), 갈매기(가끔 하늘을 가로지름). 화면마다 다르고 서로 공유하지 않음
+const crab={fx:rnd(),fy:.35+rnd()*.5,dir:rnd()<.5?-1:1,hide:0,t:0,seen:false};
+const fish=Array.from({length:3},()=>({fx:rnd(),fy:.55+rnd()*.4,dir:rnd()<.5?-1:1,sp:.015+rnd()*.015,ph:rnd()*7}));
+const gulls=[];let gullT=20+rnd()*30,gullSeen=false;
+function spawnGull(){const dir=rnd()<.5?1:-1;gulls.push({fx:dir>0?-.05:1.05,fy:.12+rnd()*.2,dir,sp:.05+rnd()*.03,ph:rnd()*7,sc:.6+rnd()*.6});if(!gullSeen){gullSeen=true;toast('갈매기가 지나가요');}gullCall();}
+
 // 함께 머물기: Supabase Realtime(무료 플랜) 채널로 위치만 주고받음. 서버 코드·DB 없음
 const remotes={};let chan=null,db=null,joined=false,lastSend=0,lastSent='';
 const toFrac=c=>{const l=L();return{fx:+(c.x/W).toFixed(4),fy:+((c.y-l.shore)/(l.bottom-l.shore)).toFixed(4)}};
@@ -235,18 +245,19 @@ function sendFx(type,extra){if(joined&&player.id)chan.send({type:'broadcast',eve
 // 물수제비 순위판: 지금 이 바닷가에 있는 사람(나·NPC·함께 모드 접속자) 기준. 내 기록만 브라우저에 저장
 let boardDirty=true;
 const SAVE='mulmeong.skips';
+const saveSkips=()=>{try{localStorage.setItem(SAVE,JSON.stringify({skips:player.skips,best:player.best,todayBest:player.todayBest,todayDate:player.todayDate,streak:player.streak}));}catch(e){}};
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
 function renderBoard(){boardDirty=false;const box=$('#board');box.hidden=!player;if(!player)return;box.replaceChildren(el('h3','물수제비'),el('small','지금 바닷가에 있는 사람'));
  const ol=el('ol'),top=[player,...Object.values(remotes)].filter(c=>c.skips>0).sort((a,b)=>b.skips-a.skips).slice(0,3);
  top.forEach((c,i)=>{const li=el('li');li.append(el('i',i+1),el('span',c.name),el('b',c.skips+'번'));ol.append(li);});
  if(!top.length)ol.append(el('li','아직 아무도 던지지 않았어요','empty'));
- const me=el('li',null,'me');me.append(el('i','나'),el('span',player.best?'최고 '+player.best+'번 튕김':'아직 안 던졌어요'),el('b',(player.skips||0)+'번'));ol.append(me);box.append(ol);}
+ const me=el('li',null,'me');me.append(el('i','나'),el('span',player.best?'최고 '+player.best+'번'+(player.todayBest&&player.todayDate===new Date().toDateString()?' · 오늘 '+player.todayBest+'번':'')+(player.streak>=2?' · '+player.streak+'연속':''):'아직 안 던졌어요'),el('b',(player.skips||0)+'번'));ol.append(me);box.append(ol);}
 
 function setGoal(c,x,y,then){const g=clampGoal(c,x,y);c.tx=g.x;c.ty=g.y;c.then=then||null;c.sit=false;if(then!=='land')c.after=null;}
 // 튕기는 횟수는 1~9번 랜덤(적게 튕기는 쪽이 흔함). 많이 튕길수록 멀리, 오래 날아간다
 function throwStone(c,hops){c.sit=false;c.state='throw';c.t=0;const l=L(),dir=c.face||1;hops=hops||1+(rnd()*rnd()*9|0);
  c.skips=(c.skips||0)+1;c.best=Math.max(c.best||0,hops);boardDirty=true;
- if(c===player)try{localStorage.setItem(SAVE,JSON.stringify({skips:c.skips,best:c.best}));}catch(e){}
+ if(c===player)saveSkips();
  const sx=c.x,sy=c.swim?c.y:l.shore-2,ex=clamp(sx+dir*(60+hops*35)*(.8+rnd()*.4),20,W-20),ey=l.horizon+(l.shore-l.horizon)*clamp(.5-hops*.045,.1,.5);
  stones.push({sx,sy,ex,ey,p:0,hops,dur:.9+hops*.22,prev:0,owner:c});return hops;}
 function splash(x,y,n){const l=L(),k=.35+clamp((y-l.horizon)/(l.shore-l.horizon),0,1)*.9;for(let i=0;i<n;i++)particles.push({x,y,vx:(rnd()-.5)*70*k,vy:-(40+rnd()*70)*k,a:.9,k});}
@@ -272,13 +283,25 @@ function updateFX(dt){const l=L();
  for(let i=ripples.length;i--;){const r=ripples[i];r.r+=40*r.s*dt;r.a-=dt*.55;if(r.a<=0)ripples.splice(i,1);}
  for(let i=stones.length;i--;){const s=stones[i];s.p+=dt/s.dur;
   if(s.p>=1){ripples.push(mkRipple(s.ex,s.ey,1.2));splash(s.ex,s.ey,8);plop(.8);floaters.push({x:s.ex,y:s.ey-10,text:s.hops+'번!',a:1});
-   if(s.owner===player)toast(s.hops+'번 튕겼어요!'+(s.hops>=player.best?' 최고 기록':''));stones.splice(i,1);continue;}
+   if(s.owner===player){const h=s.hops,today=new Date().toDateString();player.streak=h>=3?(player.streak||0)+1:0;if(player.todayDate!==today){player.todayDate=today;player.todayBest=0;}player.todayBest=Math.max(player.todayBest||0,h);saveSkips();boardDirty=true;
+    const say=h>=9?'아홉 번… 바다가 잠깐 조용해졌어요':h>=7?'저 멀리까지 갔어요!':h>=5?'갈매기가 돌아봤어요':h>=3?'잔물결이 '+h+'번':h===2?'두 번, 퐁퐁':'퐁, 한 번';
+    toast(h+'번 튕겼어요 · '+say+(h>=player.best?' · 최고 기록':'')+(player.streak>=3?' · '+player.streak+'연속!':''));if(h>=5)spawnGull();}
+   stones.splice(i,1);continue;}
   const k=Math.floor(s.hops*s.p);if(k>s.prev){s.prev=k;const x=lerp(s.sx,s.ex,s.p),y=lerp(s.sy,s.ey,s.p);ripples.push(mkRipple(x,y,.9));splash(x,y,5);plop();}}
  for(let i=particles.length;i--;){const p=particles[i];p.vy+=220*p.k*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.a-=dt*1.6;if(p.a<=0)particles.splice(i,1);}
  for(let i=floaters.length;i--;){const f=floaters[i];f.y-=25*dt;f.a-=dt*.8;if(f.a<=0)floaters.splice(i,1);}
  for(const b of boats){const dx=b.tx-b.fx,dy=b.ty-b.fy,d=Math.hypot(dx,dy);
   if(d>.003){const s=Math.min(1,.02*dt/d);b.fx+=dx*s;b.fy+=dy*s;}
-  else{b.fx+=b.vx*dt;if(b.fx<.08||b.fx>.92)b.vx*=-1;b.tx=b.fx;}}}
+  else{b.fx+=b.vx*dt;if(b.fx<.08||b.fx>.92)b.vx*=-1;b.tx=b.fx;}}
+ // 생물
+ if(player){const cx=crab.fx*W,cy=l.shore+(l.bottom-l.shore)*crab.fy;
+  if(crab.hide>0){crab.hide-=dt;if(crab.hide<=0){crab.fx=rnd();crab.fy=.35+rnd()*.5;}}
+  else{crab.t+=dt;if(Math.hypot(player.x-cx,player.y-cy)<70*depth(cy)){crab.hide=5;if(!crab.seen){crab.seen=true;toast('게 한 마리가 모래 속으로 숨었어요');}}
+   else if(Math.sin(crab.t*.7)>0){crab.fx+=crab.dir*.012*dt;if(crab.fx<.03||crab.fx>.97)crab.dir*=-1;}}
+  for(const f of fish){const fx=f.fx*W,fy=l.horizon+(l.shore-l.horizon)*f.fy,near=player.swim&&Math.hypot(player.x-fx,player.y-fy)<45;if(near)f.dir=player.x>fx?-1:1;f.fx+=f.dir*(near?.12:f.sp)*dt;
+   if(f.fx<-.05){f.fx=1.05;f.fy=.55+rnd()*.4;}else if(f.fx>1.05){f.fx=-.05;f.fy=.55+rnd()*.4;}}}
+ gullT-=dt;if(gullT<=0){gullT=(soundMode==='gull'?12:35)+rnd()*25;if(dayPhase()<.62||soundMode==='gull')spawnGull();}
+ for(let i=gulls.length;i--;){const g=gulls[i];g.fx+=g.dir*g.sp*dt;if(g.fx<-.1||g.fx>1.1)gulls.splice(i,1);}}
 
 // 그리기
 function drawScene(t){const l=L(),swell=Math.sin(t*.53),p=dayPhase(),S=sky(p);let g;
@@ -325,6 +348,19 @@ function drawScene(t){const l=L(),swell=Math.sin(t*.53),p=dayPhase(),S=sky(p);le
  for(const r of grass){const x=r.fx*W,y=l.shore+(l.bottom-l.shore)*r.fy,sw=Math.sin(t*1.1+r.ph)*4;ctx.beginPath();ctx.moveTo(x,y);ctx.quadraticCurveTo(x+sw,y-r.h*.6,x+sw*1.8,y-r.h);ctx.stroke();}}
 function drawRipple(r){const l=L(),k=.35+clamp((r.y-l.horizon)/(l.shore-l.horizon),0,1)*.9;ctx.strokeStyle=`rgba(220,235,255,${r.a})`;ctx.lineWidth=1.2;ctx.beginPath();ctx.ellipse(r.x,r.y,r.r*k,r.r*k*.32,0,0,7);ctx.stroke();}
 function drawStone(s){const x=lerp(s.sx,s.ex,s.p),y=lerp(s.sy,s.ey,s.p),h=Math.abs(Math.sin(Math.PI*s.hops*s.p))*(26*(1-s.p)+3);ctx.fillStyle='#9aa3ad';ctx.beginPath();ctx.arc(x,y-h,3,0,7);ctx.fill();}
+function drawCreatures(t){const l=L(),p=dayPhase(),dl=p<.6?Math.min(1,Math.sin(Math.PI*p/.6)*1.4):0;
+ // 물고기 그림자: 물속이라 밤엔 거의 안 보임
+ for(const f of fish){const x=f.fx*W,y=l.horizon+(l.shore-l.horizon)*f.fy,d=depth(y),sw=Math.sin(t*5+f.ph)*2*d;ctx.fillStyle=`rgba(8,18,40,${.1+.22*dl})`;ctx.beginPath();ctx.ellipse(x,y,9*d,3*d,0,0,7);ctx.fill();
+  ctx.beginPath();ctx.moveTo(x-f.dir*8*d,y);ctx.lineTo(x-f.dir*14*d,y-3*d+sw);ctx.lineTo(x-f.dir*14*d,y+3*d+sw);ctx.closePath();ctx.fill();}
+ // 갈매기: 날갯짓하는 M자
+ ctx.lineCap='round';
+ for(const g of gulls){const x=g.fx*W,y=g.fy*l.horizon+Math.sin(t*1.5+g.ph)*4,s=7*g.sc,fl=Math.sin(t*7+g.ph)*s*.6;ctx.strokeStyle=dl>.5?`rgba(250,246,240,${.5+.3*dl})`:'rgba(200,205,220,.55)';ctx.lineWidth=1.4*g.sc;
+  ctx.beginPath();ctx.moveTo(x-s*1.6,y-fl*.3);ctx.quadraticCurveTo(x-s*.8,y-fl,x,y);ctx.quadraticCurveTo(x+s*.8,y-fl,x+s*1.6,y-fl*.3);ctx.stroke();}
+ // 게: 다가가면 1초 동안 모래로 가라앉았다가 다른 자리에 다시 나옴
+ if(crab.hide<=0||crab.hide>4){const x=crab.fx*W,y=l.shore+(l.bottom-l.shore)*crab.fy,d=depth(y),s=4*d,sink=crab.hide>0?clamp(5-crab.hide,0,1):0;ctx.save();ctx.globalAlpha=(1-sink)*(.6+.4*dl);ctx.translate(x,y+sink*6);
+  const leg=crab.hide>0?0:Math.sin(t*10)*s*.4;ctx.strokeStyle='#b9472e';ctx.lineWidth=Math.max(1,1.2*d);
+  for(let i=-1;i<=1;i+=2)for(let k=0;k<3;k++){ctx.beginPath();ctx.moveTo(i*s*.8,-s*.2+k*s*.3);ctx.lineTo(i*s*1.7,s*.3+k*s*.3+(k%2?leg:-leg));ctx.stroke();}
+  ctx.fillStyle='#d9583a';ctx.beginPath();ctx.ellipse(0,0,s*1.1,s*.7,0,0,7);ctx.fill();ctx.fillStyle='#2b1510';ctx.beginPath();ctx.arc(-s*.35,-s*.7,s*.18,0,7);ctx.arc(s*.35,-s*.7,s*.18,0,7);ctx.fill();ctx.restore();}}
 function drawVignette(){const g=ctx.createRadialGradient(W/2,H*.5,Math.min(W,H)*.42,W/2,H*.5,Math.max(W,H)*.78);g.addColorStop(0,'rgba(10,12,24,0)');g.addColorStop(1,'rgba(10,12,24,.55)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);}
 function drawFX(){for(const p of particles){ctx.fillStyle=`rgba(225,240,255,${p.a})`;ctx.beginPath();ctx.arc(p.x,p.y,1.6*p.k,0,7);ctx.fill();}
  ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 15px sans-serif';
@@ -370,7 +406,7 @@ let last=performance.now();
 function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const t=now/1000;
  if(player){stepChar(player,dt);keyMove(player,dt);sendMove();}
  for(const id in remotes)stepChar(remotes[id],dt);
- updateFX(dt);drawScene(t);
+ updateFX(dt);drawScene(t);drawCreatures(t);
  for(const b of boats)drawBoat(b,t);for(const r of ripples)drawRipple(r);for(const s of stones)drawStone(s);
  const chars=Object.values(remotes);if(player)chars.push(player);chars.sort((a,b)=>a.y-b.y);for(const c of chars)drawChar(c,t);
  drawFX();drawVignette();if(boardDirty)renderBoard();
@@ -378,19 +414,33 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const t=now/
 requestAnimationFrame(frame);
 
 // 소리: 파일 없이 브라우저가 직접 합성(무료·저작권 걱정 없음). 약 12초마다 한 번씩 밀려왔다 빠지는 파도
-let AC,master,whiteBuf,enabled=true;
+let AC,master,whiteBuf,enabled=true,waveBus,crBus,rainBus;
+// 배경 소리 고르기: 파도 / 파도+갈매기 / 밤 풀벌레 / 빗소리. 전부 합성이라 파일 없음. 선택은 브라우저에 기억
+const SNDKEY='mulmeong.sound';let soundMode=['wave','gull','cricket','rain'].includes(store(SNDKEY))?store(SNDKEY):'wave';$('#soundMode').value=soundMode;
+function setMode(m){soundMode=m;store(SNDKEY,m);$('#soundMode').value=m;if(!AC)return;const n=AC.currentTime,r=(g,v)=>g.gain.setTargetAtTime(v,n,1.2);
+ r(waveBus,m==='rain'?.3:m==='cricket'?.45:1);r(crBus,m==='cricket'?.025:0);r(rainBus,m==='rain'?.2:0);}
+// 갈매기 울음: 짧게 내려가는 톱니파 한두 번. 파도+갈매기 모드에서만
+function gullCall(){if(!AC||!enabled||soundMode!=='gull')return;const n=AC.currentTime;
+ for(let i=0,k=1+(rnd()*2|0);i<k;i++){const t0=n+i*.28,o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();o.type='sawtooth';o.frequency.setValueAtTime(1500+rnd()*300,t0);o.frequency.exponentialRampToValueAtTime(900,t0+.22);f.type='lowpass';f.frequency.value=2600;
+  g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.06,t0+.03);g.gain.exponentialRampToValueAtTime(.001,t0+.25);o.connect(f).connect(g).connect(master);o.start(t0);o.stop(t0+.26);}}
 function noise(brown){const b=AC.createBuffer(1,AC.sampleRate*3,AC.sampleRate),d=b.getChannelData(0);let l=0;
  for(let i=0;i<d.length;i++){const w=rnd()*2-1;if(brown){l=(l+.02*w)/1.02;d[i]=l*3.5;}else d[i]=w;}return b;}
 function startAudio(){if(AC)return;AC=new(window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=0;master.connect(AC.destination);
- const swellHz=.085;
- const layer=(buf,type,freq,q,base,depthAmt,delay)=>{const src=AC.createBufferSource();src.buffer=buf;src.loop=true;const f=AC.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;
-  const g=AC.createGain();g.gain.value=base;src.connect(f).connect(g).connect(master);src.start();
+ const swellHz=.085;waveBus=AC.createGain();waveBus.gain.value=1;waveBus.connect(master);
+ const layer=(buf,type,freq,q,base,depthAmt,delay,dest=waveBus)=>{const src=AC.createBufferSource();src.buffer=buf;src.loop=true;const f=AC.createBiquadFilter();f.type=type;f.frequency.value=freq;f.Q.value=q;
+  const g=AC.createGain();g.gain.value=base;src.connect(f).connect(g).connect(dest);src.start();
   if(depthAmt){const lfo=AC.createOscillator();lfo.frequency.value=swellHz;const lg=AC.createGain();lg.gain.value=depthAmt;lfo.connect(lg).connect(g.gain);lfo.start(AC.currentTime+delay);}};
  whiteBuf=noise(false);
  layer(noise(true),'lowpass',420,.6,.55,.45,0);    // 밀려오는 파도(저음)
  layer(whiteBuf,'bandpass',2200,.7,.07,.06,1.8);   // 부서지는 거품(고음), 조금 늦게 따라옴
  layer(whiteBuf,'highpass',5000,.7,.012,0,0);      // 바닷바람
- setAudio(enabled);}
+ // 빗소리: 중음 잡음이 조금씩 세졌다 약해짐
+ rainBus=AC.createGain();rainBus.gain.value=0;rainBus.connect(master);layer(whiteBuf,'bandpass',1600,.4,1,.25,0,rainBus);
+ // 풀벌레: 4.3kHz 한 음을 24Hz로 떨고, 0.6Hz로 울었다 쉬었다
+ crBus=AC.createGain();crBus.gain.value=0;crBus.connect(master);const cr=AC.createOscillator();cr.type='sine';cr.frequency.value=4300;const am=AC.createGain();am.gain.value=0;
+ for(const [hz,amt] of [[24,.5],[.6,.5]]){const o=AC.createOscillator();o.frequency.value=hz;const g=AC.createGain();g.gain.value=amt;o.connect(g).connect(am.gain);o.start();}
+ cr.connect(am).connect(crBus);cr.start();
+ setMode(soundMode);setAudio(enabled);}
 // 첨벙 = 낮은 "첨"(둔탁한 울림) + 물 튀는 잡음(높은 데서 낮은 데로) + 물방울 "벙"(짧은 고음 몇 개). 파도 소리보다 크게
 function splashSound(v=1){if(!AC||!enabled)return;const n=AC.currentTime;
  const src=AC.createBufferSource();src.buffer=whiteBuf;const f=AC.createBiquadFilter();f.type='bandpass';f.Q.value=.6;f.frequency.setValueAtTime(3200,n);f.frequency.exponentialRampToValueAtTime(500,n+.28);
@@ -434,9 +484,10 @@ $('.rail').addEventListener('click',e=>{const b=e.target.closest('button');if(!b
  else if(a==='boat'){if(myWish){toast(`소원배는 한 사람당 하나예요 · 내 소원: “${myWish.text}”`);return;}$('#wishText').value='';ask.classList.add('on');setTimeout(()=>$('#wishText').focus(),50);}
  else if(a==='breath')startBreath();});
 $('#enter').onclick=()=>{player=makeChar(nick,.5,.75,rnd()*360|0,false);$('#gate').classList.add('off');$('#ui').style.opacity=1;
- try{const s=JSON.parse(localStorage.getItem(SAVE));if(s){player.skips=s.skips|0;player.best=s.best|0;}}catch(e){}boardDirty=true;if(myWish)addWish(myWish);
+ try{const s=JSON.parse(localStorage.getItem(SAVE));if(s){player.skips=s.skips|0;player.best=s.best|0;player.todayBest=s.todayBest|0;player.todayDate=s.todayDate;player.streak=s.streak|0;}}catch(e){}boardDirty=true;if(myWish)addWish(myWish);
  if($('#soundOpt').checked)startAudio();else setAudio(false);toast(`${nick}님, 오늘은 ${OUTFITS[player.outfit]} 차림이에요. 천천히 머물다 가세요`);connect().catch(e=>console.warn('함께 모드 연결 실패, 혼자 모드로 계속',e));};
 $('#sound').onclick=()=>{if(!AC)startAudio();setAudio(!enabled);};
+$('#soundMode').onchange=e=>{const m=e.target.value;if(!AC)startAudio();setMode(m);if(!enabled)setAudio(true);toast({wave:'이제 파도 소리만 들려요',gull:'갈매기가 가끔 울어요',cricket:'밤 풀벌레 소리로 바꿨어요',rain:'빗소리로 바꿨어요'}[m]);}; // startAudio가 저장된 모드로 select를 되돌리므로 값을 먼저 읽는다
 })();
 </script>
 <!-- 방문자 통계(Cloudflare Web Analytics) -->
