@@ -200,7 +200,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stro
 
 <div class="ask" id="ask" role="dialog" aria-modal="true" aria-labelledby="wishTitle" aria-describedby="wishHelp"><form id="wishForm"><h3 id="wishTitle">소원배에 적을 한 줄</h3><p id="wishHelp">한 사람당 소원배는 하나예요. 모두에게 보이고, 30자까지 적을 수 있어요.</p><label for="wishText">바다에 전하고 싶은 말</label><input aria-describedby="wishHelp" id="wishText" maxlength="30" placeholder="올해는 가족 모두 건강하게" autocomplete="off" required><div class="btns"><button type="button" id="wishCancel">취소</button><button type="submit">바다에 띄우기</button></div></form></div>
 
-<div class="breath" id="breath"><div class="circle" id="circle"></div><p id="btext">들이쉬기</p><small>아무 곳이나 누르면 돌아가요</small></div>
+<div class="breath" id="breath"><div class="circle" id="circle"></div><p id="btext">들이쉬기</p><small id="bwith"></small><small>아무 곳이나 누르면 돌아가요</small></div>
 
 <script>
 (()=>{
@@ -280,16 +280,21 @@ async function connect(){if(!CONFIG.supabaseUrl||!CONFIG.supabaseKey)return;
  const me=player.id=Math.random().toString(36).slice(2,10);
  db=createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);chan=db.channel('mulmeong',{config:{presence:{key:me}}});
  db.from('mulmeong_wishes').select('id,name,text').order('created_at',{ascending:false}).limit(12).then(({data,error})=>{if(error)console.warn('소원 불러오기 실패',error);(data||[]).reverse().forEach(addWish);});
- chan.on('presence',{event:'sync'},()=>{const st=chan.presenceState();$('#count').textContent='함께 '+Object.keys(st).length+'명';for(const id in remotes)if(!st[id])delete remotes[id];})
- // 다른 사람이 보낸 값은 믿지 않는다: 숫자 아니면 버리고, 범위를 자른다
- .on('broadcast',{event:'move'},({payload:p})=>{if(!p||p.id===me||typeof p.id!=='string')return;const fx=+p.fx,fy=+p.fy;if(!isFinite(fx)||!isFinite(fy))return;
+ const applyMove=p=>{if(!p||p.id===me||typeof p.id!=='string')return;const fx=+p.fx,fy=+p.fy;if(!isFinite(fx)||!isFinite(fy))return;
   const l=L(),r=remotes[p.id]||(remotes[p.id]=makeChar(String(p.name||'누군가').slice(0,16),clamp(fx,0,1),clamp(fy,-1.2,1),(+p.hue||0)%360,true,0,0));
-  r.name=String(p.name||'누군가').slice(0,16);r.hue=(+p.hue||0)%360;r.outfit=clamp(p.o|0,0,OUTFITS.length-1);r.hair=clamp(p.h|0,0,HAIR.length-1);r.swim=!!p.swim;r.tx=clamp(fx,0,1)*W;r.ty=l.shore+(l.bottom-l.shore)*clamp(fy,-1.2,1);r.sit=!!p.sit;if(Math.abs(r.tx-r.x)<1.5)r.face=p.face<0?-1:1;})
+  r.name=String(p.name||'누군가').slice(0,16);r.hue=(+p.hue||0)%360;r.outfit=clamp(p.o|0,0,OUTFITS.length-1);r.hair=clamp(p.h|0,0,HAIR.length-1);r.swim=!!p.swim;r.tx=clamp(fx,0,1)*W;r.ty=l.shore+(l.bottom-l.shore)*clamp(fy,-1.2,1);r.sit=!!p.sit;if(Math.abs(r.tx-r.x)<1.5)r.face=p.face<0?-1:1;};
+ chan.on('presence',{event:'sync'},()=>{const st=chan.presenceState();$('#count').textContent='함께 '+Object.keys(st).length+'명';for(const id in remotes)if(!st[id])delete remotes[id];
+  for(const id in st)if(!remotes[id]&&st[id][0])applyMove({id,...st[id][0]});breathCount();}) // 움직이기 전에도 접속한 사람은 바로 보인다
+ .on('presence',{event:'join'},({key})=>{if(key!==me)sendMove(true);})
+ // 다른 사람이 보낸 값은 믿지 않는다: 숫자 아니면 버리고, 범위를 자른다
+ .on('broadcast',{event:'move'},({payload:p})=>applyMove(p))
  .on('broadcast',{event:'fx'},({payload:p})=>{const r=p&&remotes[p.id];if(!r)return;
-  if(p.type==='stone'){throwStone(r,clamp(p.hops|0,1,9));r.skips=clamp(p.skips|0,0,99999);r.best=clamp(p.best|0,0,9);boardDirty=true;}})
+  if(p.type==='stone'){throwStone(r,clamp(p.hops|0,1,9));r.skips=clamp(p.skips|0,0,99999);r.best=clamp(p.best|0,0,9);boardDirty=true;}
+  else if(p.type==='breath'){r.breath=!!p.on;breathCount();}})
  .on('broadcast',{event:'wish'},({payload:w})=>{if(w&&typeof w.id==='string'&&w.text)addWish(w,true);})
  .on('broadcast',{event:'say'},({payload:p})=>{const r=p&&remotes[p.id];if(!r||typeof p.text!=='string')return;r.say=cleanSay(p.text);r.sayT=6;})
- .subscribe(async s=>{if(s==='SUBSCRIBED'){joined=true;await chan.track({name:player.name});sendMove(true);}else if(s==='CLOSED'||s==='CHANNEL_ERROR')joined=false;});}
+ .subscribe(async s=>{if(s==='SUBSCRIBED'){joined=true;await chan.track({name:player.name,hue:player.hue,o:player.outfit,h:player.hair,...toFrac(player)});sendMove(true);}else if(s==='CLOSED'||s==='CHANNEL_ERROR')joined=false;});
+ setInterval(()=>sendMove(),1000);} // rAF가 멈춘 뒤쪽 탭에서도 위치를 보낸다
 function sendMove(force){if(!joined||!player.id)return;const now=performance.now(),p={id:player.id,name:player.name,hue:player.hue,o:player.outfit,h:player.hair,sit:player.sit,swim:player.swim,face:player.face,...toFrac(player)},key=JSON.stringify(p);
  if(!force&&(key===lastSent?now-lastSend<5000:now-lastSend<250))return; // 움직일 때 초당 4번, 가만히 있으면 5초마다
  lastSend=now;lastSent=key;chan.send({type:'broadcast',event:'move',payload:p});}
@@ -474,6 +479,7 @@ function drawBody(c,x,y,s){const A=`hsl(${c.hue} 60% 55%)`,B=`hsl(${(c.hue+40)%3
  if(o===0){ctx.fillStyle=B;for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(T[0]+T[2]*(.18+.64*((i*.37+.1)%1)),T[1]+T[3]*(.12+.76*((i*.61+.2)%1)),s*.15,0,7);ctx.fill();}}
  if(o===1){ctx.fillStyle=B;rr(T[0],T[1]+T[3]*.3,T[2],T[3]*.16,2);ctx.fill();}
  if(o===2){ctx.fillStyle=A;rr(T[0],T[1]+T[3]*.22,T[2],T[3]*.3,s*.3);ctx.fill();}}
+function drawHalo(c,t){const s=depth(c.y)*Math.max(9,H/60),cx=c.x,cy=c.y-s*1.6,r=s*(2.4+.6*Math.sin(t*.9));const g=ctx.createRadialGradient(cx,cy,r*.15,cx,cy,r);g.addColorStop(0,'rgba(246,193,119,.5)');g.addColorStop(1,'rgba(246,193,119,0)');ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();}
 function drawChar(c,t){const d=depth(c.y),s=d*Math.max(9,H/60),skin='#f3d2b4',o=c.outfit;let x=c.x,y=c.y,hy;
  if(c.swim){ // 물 위로 머리와 어깨, 팔만
   y+=Math.sin(t*2+c.x)*1.5;ctx.fillStyle='rgba(255,255,255,.18)';ctx.beginPath();ctx.ellipse(x,y+2,s*1.6,s*.5,0,0,7);ctx.fill();
@@ -499,7 +505,7 @@ function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;const t=now/
  updateFX(dt);fpk=clamp(fpk+(gaze&&player&&!player.swim?dt/1.8:-dt/.8),0,1);
  if(fpk<1){drawScene(t);drawCreatures(t);
  for(const b of boats)drawBoat(b,t);for(const r of ripples)drawRipple(r);for(const s of stones)drawStone(s);
- const chars=Object.values(remotes);if(player)chars.push(player);chars.sort((a,b)=>a.y-b.y);for(const c of chars)drawChar(c,t);
+ const chars=Object.values(remotes);if(player)chars.push(player);chars.sort((a,b)=>a.y-b.y);for(const c of chars){if(c.breath)drawHalo(c,t);drawChar(c,t);}
  drawFX();}
  if(fpk>0)drawFirstPerson(t,fpk); // 물멍 중엔 1인칭으로 서서히 넘어가고, 화면을 누르면 돌아온다
  drawVignette();if(boardDirty)renderBoard();
@@ -554,10 +560,11 @@ function toast(m){const el=$('#toast');el.textContent=m;el.classList.add('on');c
 function enterGaze(){gaze=true;if(!player.swim)player.sit=true;player.tx=player.x;player.ty=player.y;player.then=null;toast(player.swim?'아무것도 하지 않아도 괜찮아요':'바다 앞에 앉았어요 · 화면을 누르면 돌아와요');clearTimeout(gazeT);gazeT=setTimeout(()=>{if(gaze)$('#ui').style.opacity=.15;},2500);}
 function exitGaze(){if(!gaze)return;gaze=false;player.sit=false;clearTimeout(gazeT);$('#ui').style.opacity=1;}
 const breath=$('#breath'),circle=$('#circle'),btext=$('#btext');
-function startBreath(){clearTimeout(bT);breath.classList.add('on');const ph=[['들이쉬기',4,1],['잠시 멈추기',4,1],['내쉬기',6,.6]];let i=0;
+function breathCount(){const n=(player&&player.breath?1:0)+Object.values(remotes).filter(r=>r.breath).length;$('#bwith').textContent=n>1?`지금 ${n}명이 함께 숨 쉬고 있어요`:'지금은 혼자 조용히 · 누군가 함께하면 알려드려요';}
+function startBreath(){clearTimeout(bT);breath.classList.add('on');if(player){player.breath=true;sendFx('breath',{on:true});}breathCount();const ph=[['들이쉬기',4,1],['잠시 멈추기',4,1],['내쉬기',6,.6]];let i=0;
  const go=()=>{const [txt,sec,sc]=ph[i++%3];btext.textContent=txt;circle.style.transitionDuration=sec+'s';circle.style.transform=`scale(${sc})`;bT=setTimeout(go,sec*1000);};
  circle.style.transitionDuration='0s';circle.style.transform='scale(.6)';requestAnimationFrame(()=>requestAnimationFrame(go));}
-breath.onclick=()=>{breath.classList.remove('on');clearTimeout(bT);};
+breath.onclick=()=>{breath.classList.remove('on');clearTimeout(bT);if(player&&player.breath){player.breath=false;sendFx('breath',{on:false});}};
 const ask=$('#ask');
 $('#wishCancel').onclick=()=>ask.classList.remove('on');
 $('#wishForm').onsubmit=async e=>{e.preventDefault();const text=$('#wishText').value.trim().slice(0,30);if(!text)return;ask.classList.remove('on');
